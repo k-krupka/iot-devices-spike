@@ -21,20 +21,20 @@ namespace IoTHub_QueryDevices_Spike
             // *************************************************************
             // Get device count for final validation
             // *************************************************************
-            // await GetDeviceCountStatsViaQuery("iothub-devices-100");
-            // await GetDeviceCountStatsViaQuery("iothub-devices-1000");
-            // await GetDeviceCountStatsViaQuery("iothub-devices-10000");
-            // await GetDeviceCountStatsViaQuery("iothub-devices-100000");
-            // await GetDeviceCountStatsViaQuery("iothub-devices-1000000");
+            await GetDeviceCountStatsViaQuery("iothub-devices-100");
+            await GetDeviceCountStatsViaQuery("iothub-devices-1000");
+            await GetDeviceCountStatsViaQuery("iothub-devices-10000");
+            await GetDeviceCountStatsViaQuery("iothub-devices-100000");
+            await GetDeviceCountStatsViaQuery("iothub-devices-1000000");
 
             // *************************************************************
             // Create devices in each of the IoT Hubs
             // *************************************************************
-            // CreateDeices("iothub-devices-100", 100);
-            // CreateDeices("iothub-devices-1000", 1000);
-            // CreateDeices("iothub-devices-10000", 10000);
+            CreateDeices("iothub-devices-100", 100);
+            CreateDeices("iothub-devices-1000", 1000);
+            CreateDeices("iothub-devices-10000", 10000);
             CreateDeices("iothub-devices-100000", 100000);
-            // CreateDeices("iothub-devices-1000000", 1000000);
+            CreateDeices("iothub-devices-1000000", 1000000);
 
             // *************************************************************
             // Query devices... examples
@@ -156,16 +156,18 @@ namespace IoTHub_QueryDevices_Spike
             }
             else if (totalDeviceCount == numberOfDevicesToCreate)
             {
-                Console.WriteLine($"{DateTime.Now} iot hub: '{iotHubName}'. Creation of {numberOfDevicesToCreate} devices skipped. All devices already created.");
+                Console.WriteLine($"{DateTime.Now} iot hub: '{iotHubName}'. Creation of devices skipped. All devices already created.");
             }
             else
             {
+                Console.WriteLine($"{DateTime.Now} iot hub: '{iotHubName}'. Creation of {numberOfDevicesToCreate} devices starting...");
+
                 int currentIndex = (int)totalDeviceCount;
 
                 IList<int> devicesToCreate = Enumerable.Range(0, numberOfDevicesToCreate - totalDeviceCount).ToList();
 
                 var allTasks = new List<Task>();
-                var throttler = new SemaphoreSlim(initialCount: 8);
+                var throttler = new SemaphoreSlim(40);
 
                 foreach (var _ in devicesToCreate)
                 {
