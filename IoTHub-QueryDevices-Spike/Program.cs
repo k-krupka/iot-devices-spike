@@ -186,7 +186,7 @@ namespace IoTHub_QueryDevices_Spike
                                 }
                                 catch (ThrottlingException)
                                 {
-                                    Console.WriteLine("throttling exception... retrying");
+                                    Console.WriteLine($"[{iotHubName}] throttling exception... retrying");
 
                                     await Task.Delay(1000 * 10).ConfigureAwait(false);
                                 }
