@@ -8,7 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Devices;
 using Microsoft.Azure.Devices.Common.Exceptions;
+using Microsoft.Azure.Devices.Shared;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace IoTHub_QueryDevices_Spike
 {
@@ -19,11 +21,11 @@ namespace IoTHub_QueryDevices_Spike
             // *************************************************************
             // Get device count for final validation
             // *************************************************************
-            // await GetDeviceCountStatsViaQuery("iothub-devices-100").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaQuery("iothub-devices-1000").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaQuery("iothub-devices-10000").ConfigureAwait(false);
-            await GetDeviceCountStatsViaQuery("iothub-devices-100000").ConfigureAwait(false);
-            await GetDeviceCountStatsViaQuery("iothub-devices-1000000").ConfigureAwait(false);
+            // await GetDeviceCountStatsViaQuery("iothub-devices-100");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-1000");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-10000");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-100000");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-1000000");
 
             // *************************************************************
             // Create devices in each of the IoT Hubs
@@ -31,7 +33,7 @@ namespace IoTHub_QueryDevices_Spike
             // CreateDeices("iothub-devices-100", 100);
             // CreateDeices("iothub-devices-1000", 1000);
             // CreateDeices("iothub-devices-10000", 10000);
-            // CreateDeices("iothub-devices-100000", 100000);
+            CreateDeices("iothub-devices-100000", 100000);
             // CreateDeices("iothub-devices-1000000", 1000000);
 
             // *************************************************************
@@ -48,13 +50,9 @@ namespace IoTHub_QueryDevices_Spike
         {
             RegistryManager registryManager = RegistryManager.CreateFromConnectionString(Settings.IotHubNameToConnectionStringDictionary[iotHubName]);
 
-            string queryString = "SELECT COUNT() AS numberOfDevices FROM devices";
-            IQuery query = registryManager.CreateQuery(queryString, 1);
-            string json = (await query.GetNextAsJsonAsync()).FirstOrDefault();
-            Dictionary<string, long> data = JsonConvert.DeserializeObject<Dictionary<string, long>>(json);
-            long count1 = data["numberOfDevices"];
+            var count = await GetTotalDeviceCountForGivenIotHub(registryManager).ConfigureAwait(false);
 
-            Console.WriteLine($"iothub (query): '{iotHubName}' contains a total of {count1} devices");
+            Console.WriteLine($"iot hub: '{iotHubName}' contains a total of {count} devices");
         }
 
         private static async Task QueryQueryDevicesSuite()
@@ -120,58 +118,74 @@ namespace IoTHub_QueryDevices_Spike
 
             RegistryManager registryManager = RegistryManager.CreateFromConnectionString(Settings.IotHubNameToConnectionStringDictionary[iotHubName]);
 
-            RegistryStatistics stats = await registryManager.GetRegistryStatisticsAsync().ConfigureAwait(false);
+            int totalDeviceCount = await GetTotalDeviceCountForGivenIotHub(registryManager);
 
-            Console.WriteLine("number OF ALL to create: " + numberOfDevicesToCreate);
-            Console.WriteLine("number of currently created: " + stats.TotalDeviceCount);
-            Console.WriteLine("number to create         : " + (numberOfDevicesToCreate - (int)stats.TotalDeviceCount));
+            Console.WriteLine("number of all to create    : " + numberOfDevicesToCreate);
+            Console.WriteLine("number of currently created: " + totalDeviceCount);
+            Console.WriteLine("number to create           : " + (numberOfDevicesToCreate - totalDeviceCount));
 
-            if (stats.TotalDeviceCount >= numberOfDevicesToCreate)
+            if (totalDeviceCount > numberOfDevicesToCreate)
             {
-                Console.WriteLine($"{DateTime.Now} iothub: '{iotHubName}'. Creation of {numberOfDevicesToCreate} devices skipped. All devices already created.");
-                return;
+                Console.WriteLine($"{DateTime.Now} iot hub: '{iotHubName}'. Too many devices created. Preparing to remove.");
+
+                int numberOfRemovedDevices = 0;
+
+                while (numberOfRemovedDevices < totalDeviceCount - numberOfDevicesToCreate)
+                {
+                    string queryString = "SELECT deviceId FROM devices";
+                    IQuery query = registryManager.CreateQuery(queryString, 10000);
+                    IEnumerable<string> jsons = await query.GetNextAsJsonAsync().ConfigureAwait(false);
+
+
+                    foreach (string json in jsons)
+                    {
+                        Console.WriteLine($"removing {numberOfRemovedDevices} / {totalDeviceCount - numberOfDevicesToCreate}");
+                        var deviceIdToRemove = JObject.Parse(json).SelectToken("deviceId").Value<string>();
+
+                        await registryManager.RemoveDeviceAsync(deviceIdToRemove);
+
+                        numberOfRemovedDevices++;
+
+                        if (numberOfRemovedDevices == totalDeviceCount - numberOfDevicesToCreate)
+                        {
+                            break;
+                        }
+                    }
+                }
+
             }
-
-            int currentIndex = (int)stats.TotalDeviceCount;
-
-            IList<int> devicesToCreate = Enumerable.Range(0, numberOfDevicesToCreate - (int)stats.TotalDeviceCount).ToList();
-
-            var allTasks = new List<Task>();
-            var throttler = new SemaphoreSlim(initialCount: 8);
-
-            foreach (var _ in devicesToCreate)
+            else if (totalDeviceCount == numberOfDevicesToCreate)
             {
-                // do an async wait until we can schedule again
-                await throttler.WaitAsync();
+                Console.WriteLine($"{DateTime.Now} iot hub: '{iotHubName}'. Creation of {numberOfDevicesToCreate} devices skipped. All devices already created.");
+            }
+            else
+            {
+                int currentIndex = (int)totalDeviceCount;
 
-                // using Task.Run(...) to run the lambda in its own parallel
-                // flow on the threadpool
-                allTasks.Add(
-                    Task.Run(async () =>
+                IList<int> devicesToCreate = Enumerable.Range(0, numberOfDevicesToCreate - totalDeviceCount).ToList();
+
+                var allTasks = new List<Task>();
+                var throttler = new SemaphoreSlim(initialCount: 8);
+
+                foreach (var _ in devicesToCreate)
+                {
+                    // do an async wait until we can schedule again
+                    await throttler.WaitAsync();
+
+                    allTasks.Add(Task.Run(async () =>
                     {
                         try
                         {
-                            //this while is a dummy implementation of retry policy
-                            while (true)
+                            while (true) //this while is a dummy implementation of retry policy
                             {
                                 try
                                 {
-                                    try
-                                    {
-                                        await registryManager.AddDeviceAsync(new Device("device-" + Guid.NewGuid()))
-                                            .ConfigureAwait(false);
-                                    }
-                                    catch (DeviceAlreadyExistsException)
-                                    {
-                                        // ignored
-                                    }
-
+                                    await registryManager.AddDeviceAsync(new Device("device-" + Guid.NewGuid())).ConfigureAwait(false);
                                     break;
                                 }
                                 catch (ThrottlingException)
                                 {
                                     Console.WriteLine($"[{iotHubName}] throttling exception... retrying");
-
                                     await Task.Delay(1000 * 10).ConfigureAwait(false);
                                 }
                             }
@@ -181,37 +195,27 @@ namespace IoTHub_QueryDevices_Spike
                             throttler.Release();
 
                             Interlocked.Increment(ref currentIndex);
-
-                            if (currentIndex % 50 == 0)
-                            {
-                                Console.WriteLine($"status ('{iotHubName}'): {currentIndex}");
-                            }
+                            if (currentIndex % 50 == 0) Console.WriteLine($"status ('{iotHubName}'): {currentIndex}");
                         }
                     }));
+                }
+
+                await Task.WhenAll(allTasks);
+
+                createTheDevicesStopwatch.Stop();
+
+                Console.WriteLine($"{DateTime.Now} iothub: '{iotHubName}'. Creation of {numberOfDevicesToCreate} devices took {createTheDevicesStopwatch.Elapsed.TotalSeconds:N0} seconds");
             }
+        }
 
-            // won't get here until all urls have been put into tasks
-            await Task.WhenAll(allTasks);
-
-
-
-
-
-
-
-            // Parallel.ForEach(devicesToCreate, new ParallelOptions() { MaxDegreeOfParallelism = 2}, async _ =>
-            //   {
-            //   });
-
-            // Parallel.For(totalDeviceCount, numberOfDevicesToCreate, new ParallelOptions() { MaxDegreeOfParallelism = 10 }, async i =>
-            // {
-
-            // });
-
-            createTheDevicesStopwatch.Stop();
-
-            Console.WriteLine($"{DateTime.Now} iothub: '{iotHubName}'. Creation of {numberOfDevicesToCreate} devices took {createTheDevicesStopwatch.Elapsed.TotalSeconds:N0} seconds");
-
+        private static async Task<int> GetTotalDeviceCountForGivenIotHub(RegistryManager regMgr)
+        {
+            string queryString = "SELECT COUNT() AS numberOfDevices FROM devices";
+            IQuery query = regMgr.CreateQuery(queryString, 1);
+            string json = (await query.GetNextAsJsonAsync()).FirstOrDefault();
+            Dictionary<string, long> data = JsonConvert.DeserializeObject<Dictionary<string, long>>(json);
+            long count1 = data["numberOfDevices"];
+            return (int)count1;
         }
     }
 }
