@@ -19,26 +19,20 @@ namespace IoTHub_QueryDevices_Spike
             // *************************************************************
             // Get device count for final validation
             // *************************************************************
-            // await GetDeviceCountStatsViaStatistics("iothub-devices-100").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaStatistics("iothub-devices-1000").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaStatistics("iothub-devices-10000").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaStatistics("iothub-devices-100000").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaStatistics("iothub-devices-1000000").ConfigureAwait(false);
-            //
             // await GetDeviceCountStatsViaQuery("iothub-devices-100").ConfigureAwait(false);
             // await GetDeviceCountStatsViaQuery("iothub-devices-1000").ConfigureAwait(false);
             // await GetDeviceCountStatsViaQuery("iothub-devices-10000").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaQuery("iothub-devices-100000").ConfigureAwait(false);
-            // await GetDeviceCountStatsViaQuery("iothub-devices-1000000").ConfigureAwait(false);
+            await GetDeviceCountStatsViaQuery("iothub-devices-100000").ConfigureAwait(false);
+            await GetDeviceCountStatsViaQuery("iothub-devices-1000000").ConfigureAwait(false);
 
             // *************************************************************
             // Create devices in each of the IoT Hubs
             // *************************************************************
-            CreateDeices("iothub-devices-100", 100);
-            CreateDeices("iothub-devices-1000", 1000);
-            CreateDeices("iothub-devices-10000", 10000);
-            CreateDeices("iothub-devices-100000", 100000);
-            CreateDeices("iothub-devices-1000000", 1000000);
+            // CreateDeices("iothub-devices-100", 100);
+            // CreateDeices("iothub-devices-1000", 1000);
+            // CreateDeices("iothub-devices-10000", 10000);
+            // CreateDeices("iothub-devices-100000", 100000);
+            // CreateDeices("iothub-devices-1000000", 1000000);
 
             // *************************************************************
             // Query devices... examples
@@ -48,16 +42,6 @@ namespace IoTHub_QueryDevices_Spike
 
             Console.WriteLine("press any key to continue...");
             Console.ReadKey();
-        }
-
-        private static async Task GetDeviceCountStatsViaStatistics(string iotHubName)
-        {
-            RegistryManager registryManager = RegistryManager.CreateFromConnectionString(Settings.IotHubNameToConnectionStringDictionary[iotHubName]);
-
-            RegistryStatistics stats = await registryManager.GetRegistryStatisticsAsync().ConfigureAwait(false);
-            int totalDeviceCount = (int)stats.TotalDeviceCount;
-
-            Console.WriteLine($"iothub (statistics): '{iotHubName}' contains a total of {totalDeviceCount} devices");
         }
 
         private static async Task GetDeviceCountStatsViaQuery(string iotHubName)
