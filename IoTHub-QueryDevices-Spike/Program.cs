@@ -21,26 +21,26 @@ namespace IoTHub_QueryDevices_Spike
             // *************************************************************
             // Get device count for final validation
             // *************************************************************
-            await GetDeviceCountStatsViaQuery("iothub-devices-100");
-            await GetDeviceCountStatsViaQuery("iothub-devices-1000");
-            await GetDeviceCountStatsViaQuery("iothub-devices-10000");
-            await GetDeviceCountStatsViaQuery("iothub-devices-100000");
-            await GetDeviceCountStatsViaQuery("iothub-devices-1000000");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-100");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-1000");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-10000");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-100000");
+            // await GetDeviceCountStatsViaQuery("iothub-devices-1000000");
 
             // *************************************************************
             // Create devices in each of the IoT Hubs
             // *************************************************************
-            CreateDeices("iothub-devices-100", 100);
-            CreateDeices("iothub-devices-1000", 1000);
-            CreateDeices("iothub-devices-10000", 10000);
-            CreateDeices("iothub-devices-100000", 100000);
-            CreateDeices("iothub-devices-1000000", 1000000);
+            // await CreateDeices("iothub-devices-100", 100);
+            // await CreateDeices("iothub-devices-1000", 1000);
+            // await CreateDeices("iothub-devices-10000", 10000);
+            // await CreateDeices("iothub-devices-100000", 100000);
+            // await CreateDeices("iothub-devices-1000000", 1000000);
 
             // *************************************************************
             // Query devices... examples
             // *************************************************************
 
-            //await QueryQueryDevicesSuite().ConfigureAwait(false);
+            await QueryQueryDevicesSuite().ConfigureAwait(false);
 
             Console.WriteLine("press any key to continue...");
             Console.ReadKey();
@@ -50,9 +50,13 @@ namespace IoTHub_QueryDevices_Spike
         {
             RegistryManager registryManager = RegistryManager.CreateFromConnectionString(Settings.IotHubNameToConnectionStringDictionary[iotHubName]);
 
+            Stopwatch timeToExecuteQuery = new Stopwatch();
+            timeToExecuteQuery.Start();
+
             var count = await GetTotalDeviceCountForGivenIotHub(registryManager).ConfigureAwait(false);
 
-            Console.WriteLine($"iot hub: '{iotHubName}' contains a total of {count} devices");
+            timeToExecuteQuery.Stop();
+            Console.WriteLine($"iot hub: '{iotHubName}' contains a total of {count} devices. Total secons: {timeToExecuteQuery.Elapsed.TotalSeconds:N0}");
         }
 
         private static async Task QueryQueryDevicesSuite()
@@ -60,19 +64,20 @@ namespace IoTHub_QueryDevices_Spike
             //this dictionary represents the size of iot hub + paging size
             Dictionary<int, List<int>> collectionToAnalyze = new Dictionary<int, List<int>>
             {
-                {100, new List<int> {200, 500, 1000} },
-                {1000, new List<int> {200, 500, 1000} },
-                {10000, new List<int> {500, 1000, 2000, 5000, 10000} },
-                // {100000, new List<int> {500, 1000, 2000, 5000, 10000} },
+                // {100, new List<int>     {500, 1000} }, doesn't make any sense to measure those two numbers, are we always have instant results
+                // {1000, new List<int>    {500, 1000} },
+                {10000, new List<int>   {500, 1000, 2000, 5000, 10000} },
+                {100000, new List<int>  {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000} },
+                {1000000, new List<int> {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000} },
             };
 
             foreach (KeyValuePair<int, List<int>> input in collectionToAnalyze)
             {
-                string currentIotHubName = "iothub-devices-" + input.Key;
+                string iotHubName = "iothub-devices-" + input.Key;
 
                 foreach (int pageSize in input.Value)
                 {
-                    await QueryDevices(currentIotHubName, pageSize).ConfigureAwait(false);
+                    await QueryDevices(iotHubName, pageSize).ConfigureAwait(false);
                 }
             }
         }
@@ -81,15 +86,11 @@ namespace IoTHub_QueryDevices_Spike
         {
             RegistryManager registryManager = RegistryManager.CreateFromConnectionString(Settings.IotHubNameToConnectionStringDictionary[iotHubName]);
 
-            {
-                //this piece of code is to hit for the first time the iothub with a query
+            //this piece of code is to hit for the first time the iothub with a query
+            string queryString = "SELECT COUNT() AS numberOfDevices FROM devices";
+            await registryManager.CreateQuery(queryString, 1).GetNextAsJsonAsync();
 
-                string queryString = "SELECT COUNT() AS numberOfDevices FROM devices";
-                IQuery query2 = registryManager.CreateQuery(queryString, 1);
-                await query2.GetNextAsJsonAsync();
-            }
-
-            LinkedList<string> devicesCollection = new LinkedList<string>();
+            //starting the actual measurement...
             Stopwatch stopwatch = new Stopwatch();
 
             stopwatch.Start();
@@ -97,16 +98,12 @@ namespace IoTHub_QueryDevices_Spike
             var query = registryManager.CreateQuery("SELECT * FROM devices", pageSize);
             while (query.HasMoreResults)
             {
-                var page = await query.GetNextAsTwinAsync();
-                foreach (var twin in page)
-                {
-                    devicesCollection.AddLast(twin.DeviceId);
-                }
+                await query.GetNextAsTwinAsync();
             }
 
             stopwatch.Stop();
 
-            Console.WriteLine($"{iotHubName,-25}, total seconds: {stopwatch.Elapsed.TotalSeconds,7:N0}, fetched {devicesCollection.Count,7} items, paging {pageSize,4}");
+            Console.WriteLine($"{iotHubName,-25}, paging {pageSize,7}, total seconds: {stopwatch.Elapsed.TotalSeconds,7:N0}");
         }
 
         private static async Task CreateDeices(string iotHubName, int numberOfDevicesToCreate)
