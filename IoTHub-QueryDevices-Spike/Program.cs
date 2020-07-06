@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -8,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Devices;
 using Microsoft.Azure.Devices.Common.Exceptions;
-using Microsoft.Azure.Devices.Shared;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -16,7 +13,7 @@ namespace IoTHub_QueryDevices_Spike
 {
     public class Program
     {
-        public static async Task Main(string[] args)
+        public static async Task Main()
         {
             // *************************************************************
             // Get device count for final validation
@@ -64,7 +61,8 @@ namespace IoTHub_QueryDevices_Spike
             //this dictionary represents the size of iot hub + paging size
             Dictionary<int, List<int>> collectionToAnalyze = new Dictionary<int, List<int>>
             {
-                // {100, new List<int>     {500, 1000} }, doesn't make any sense to measure those two numbers, are we always have instant results
+                // doesn't make any sense to measure those two numbers, are we always have instant results
+                // {100, new List<int>     {500, 1000} },
                 // {1000, new List<int>    {500, 1000} },
                 {10000, new List<int>   {500, 1000, 2000, 5000, 10000} },
                 {100000, new List<int>  {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000} },
@@ -137,7 +135,7 @@ namespace IoTHub_QueryDevices_Spike
                     foreach (string json in jsons)
                     {
                         Console.WriteLine($"removing {numberOfRemovedDevices} / {totalDeviceCount - numberOfDevicesToCreate}");
-                        var deviceIdToRemove = JObject.Parse(json).SelectToken("deviceId").Value<string>();
+                        var deviceIdToRemove = JObject.Parse(json).SelectToken("deviceId")?.Value<string>();
 
                         await registryManager.RemoveDeviceAsync(deviceIdToRemove);
 
@@ -159,7 +157,7 @@ namespace IoTHub_QueryDevices_Spike
             {
                 Console.WriteLine($"{DateTime.Now} iot hub: '{iotHubName}'. Creation of {numberOfDevicesToCreate} devices starting...");
 
-                int currentIndex = (int)totalDeviceCount;
+                int currentIndex = totalDeviceCount;
 
                 IList<int> devicesToCreate = Enumerable.Range(0, numberOfDevicesToCreate - totalDeviceCount).ToList();
 
