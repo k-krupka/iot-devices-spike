@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.Devices;
 using Microsoft.Azure.Devices.Common.Exceptions;
+using Microsoft.Azure.Devices.Shared;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -64,9 +65,10 @@ namespace IoTHub_QueryDevices_Spike
                 // doesn't make any sense to measure those two numbers, are we always have instant results
                 // {100, new List<int>     {500, 1000} },
                 // {1000, new List<int>    {500, 1000} },
-                {10000, new List<int>   {500, 1000, 2000, 5000, 10000} },
-                {100000, new List<int>  {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000} },
-                {1000000, new List<int> {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000} },
+                // {10000, new List<int>   {500, 1000, 2000, 5000, 10000} },
+                // {100000, new List<int>  {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000} },
+                // {1000000, new List<int> {500, 1000, 2000, 5000, 10000, 20000, 50000, 100000} },
+                {1000000, new List<int> {10000} },
             };
 
             foreach (KeyValuePair<int, List<int>> input in collectionToAnalyze)
@@ -84,19 +86,41 @@ namespace IoTHub_QueryDevices_Spike
         {
             RegistryManager registryManager = RegistryManager.CreateFromConnectionString(Settings.IotHubNameToConnectionStringDictionary[iotHubName]);
 
+            Console.WriteLine($"{iotHubName,-25}, {DateTime.UtcNow:T} before query for number of devices");
+
             //this piece of code is to hit for the first time the iothub with a query
             string queryString = "SELECT COUNT() AS numberOfDevices FROM devices";
             await registryManager.CreateQuery(queryString, 1).GetNextAsJsonAsync();
+
+            Console.WriteLine($"{iotHubName,-25}, {DateTime.UtcNow:T} after  query for number of devices");
 
             //starting the actual measurement...
             Stopwatch stopwatch = new Stopwatch();
 
             stopwatch.Start();
 
-            var query = registryManager.CreateQuery("SELECT * FROM devices", pageSize);
+            Console.WriteLine($"{iotHubName,-25}, {DateTime.UtcNow:T} elapsed (before query)... total seconds: {stopwatch.Elapsed.TotalSeconds,7:N0}");
+
+            var query = registryManager.CreateQuery("SELECT deviceId FROM devices", pageSize);
+
+            Console.WriteLine($"{iotHubName,-25}, {DateTime.UtcNow:T} elapsed (after query )... total seconds: {stopwatch.Elapsed.TotalSeconds,7:N0}");
+
+            int currentCount = 0;
+
             while (query.HasMoreResults)
             {
-                await query.GetNextAsTwinAsync();
+                Console.WriteLine($"{iotHubName,-25}, {DateTime.UtcNow:T} elapsed (start)... total seconds: {stopwatch.Elapsed.TotalSeconds,7:N0}");
+
+                IEnumerable<string> jsons = await query.GetNextAsJsonAsync().ConfigureAwait(false);
+
+                foreach (string json in jsons)
+                {
+                    var deviceId = JObject.Parse(json).SelectToken("deviceId")?.Value<string>();
+
+                    currentCount++;
+                }
+
+                Console.WriteLine($"{iotHubName,-25}, {DateTime.UtcNow:T}, currentCount {currentCount,7}, elapsed (end  )  ... total seconds: {stopwatch.Elapsed.TotalSeconds,7:N0}");
             }
 
             stopwatch.Stop();
