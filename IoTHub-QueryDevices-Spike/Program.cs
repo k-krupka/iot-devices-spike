@@ -34,11 +34,15 @@ namespace IoTHub_QueryDevices_Spike
             // await CreateDeices("iothub-devices-100000", 100000);
             // await CreateDeices("iothub-devices-1000000", 1000000);
 
+            await CreateDeices("iothub-cr02", 100);
+            await CreateDeices("iothub-cr03", 100);
+            await CreateDeices("iothub-cr04", 100);
+
             // *************************************************************
             // Query devices... examples
             // *************************************************************
 
-            await QueryQueryDevicesSuite().ConfigureAwait(false);
+            // await QueryQueryDevicesSuite().ConfigureAwait(false);
 
             Console.WriteLine("press any key to continue...");
             Console.ReadKey();
@@ -161,7 +165,14 @@ namespace IoTHub_QueryDevices_Spike
                         Console.WriteLine($"removing {numberOfRemovedDevices} / {totalDeviceCount - numberOfDevicesToCreate}");
                         var deviceIdToRemove = JObject.Parse(json).SelectToken("deviceId")?.Value<string>();
 
-                        await registryManager.RemoveDeviceAsync(deviceIdToRemove);
+                        try
+                        {
+                            await registryManager.RemoveDeviceAsync(deviceIdToRemove);
+                        }
+                        catch (DeviceNotFoundException e)
+                        {
+                            Console.WriteLine($"device not found {deviceIdToRemove}");
+                        }
 
                         numberOfRemovedDevices++;
 
